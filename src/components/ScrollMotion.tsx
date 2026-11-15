@@ -2,33 +2,83 @@
 
 import { useEffect } from "react";
 
-export default function ScrollMotion({ children }: { children: React.ReactNode }) {
+export default function ScrollMotion({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   useEffect(() => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion || !("IntersectionObserver" in window)) return;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
 
-    const targets = document.querySelectorAll<HTMLElement>(
-      "main section .container > *, main section .container > div > article, main section .container > div > a"
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const animatedElements = new WeakSet<Element>();
+
+    const observer = new IntersectionObserver(
+      (entries, currentObserver) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            currentObserver.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        threshold: 0.08,
+        rootMargin: "0px 0px -35px 0px",
+      }
     );
 
-    targets.forEach((element, index) => {
-      if (element.closest("header")) return;
-      element.classList.add("scroll-reveal");
-      // Small capped stagger gives adjacent editorial rows a coordinated entrance.
-      element.style.setProperty("--reveal-delay", `${Math.min(index % 5, 4) * 65}ms`);
+    const observeElements = (root: ParentNode) => {
+      const targets = root.querySelectorAll<HTMLElement>(
+        "main section .container > *, main section .container article"
+      );
+
+      targets.forEach((element, index) => {
+        if (animatedElements.has(element)) return;
+
+        if (element.closest("header")) return;
+
+        animatedElements.add(element);
+
+        element.classList.add("scroll-reveal");
+
+        element.style.setProperty(
+          "--reveal-delay",
+          `${Math.min(index % 4, 3) * 65}ms`
+        );
+
+        observer.observe(element);
+      });
+    };
+
+    // Observe the initial page.
+    observeElements(document);
+
+    // Detect new page content after Next.js navigation.
+    const mutationObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            observeElements(node);
+          }
+        });
+      });
     });
 
-    const observer = new IntersectionObserver((entries, currentObserver) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          currentObserver.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12, rootMargin: "0px 0px -45px 0px" });
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
 
-    targets.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
+    return () => {
+      mutationObserver.disconnect();
+      observer.disconnect();
+    };
   }, []);
 
   return <>{children}</>;
