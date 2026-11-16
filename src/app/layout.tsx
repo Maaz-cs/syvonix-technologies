@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ScrollMotion from "@/components/ScrollMotion";
 import "./globals.css";
+import "./services/services.css";
 
 export const metadata: Metadata = {
   title: {
